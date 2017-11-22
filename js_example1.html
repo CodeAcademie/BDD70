@@ -1,0 +1,485 @@
+<html>
+<head>
+  <title> Three body problem </title>
+  <meta name="author"      content="Oliver Knill">
+  <meta name="description" content="Javascript simulation
+       of three body problem">
+  <meta name="keywords" content="Dynamical systems, celestial mechanics
+    classical mechanics, Hamiltonian mechanics">
+  <meta name="robots" content="all">
+  <meta name="revisit-after" content="30 days">
+  <meta name="language" content="en-us">
+  <style> <!--A{text-decoration:none}-->   </style>
+
+<script language="javascript">
+
+    // By Oliver Knill,
+
+    // This page needs at least a generation 4 browser due to the use of layers.  
+    // Both IE and NS should work. 
+    // Simulation without layers would allow older browsers to see
+    // the page but we had to use too many pictures. Since people with 
+    // generation <4 browsers very likely also use older hardware, where
+    // juggling with hundrets of pictures is no fun neither, the use
+    // of layers is justified. 
+
+    // In this javascript program, the differential equations are
+    // treated numerically with a simple Euler method. The Newton 
+    // potential is regularized. Additionally, we add a harmonic long-range
+    // potential to keep particles better together. Furthermore, the
+    // position space is a torus so that in case the particles should leave,
+    // they are feeded back into the picture. 
+    // The program keeps track of energy 
+    // discrepancies (which are due to to the discretisation) and brings 
+    // the orbits of the Hamiltonian system back to the energy surface by 
+    // adding an additional friction term which is controlled by eventuel 
+    // energy discrepancy. While not quite beautiful, this is simple and works. 
+    // A serious integration of the differential equations would need a 
+    // ODE solver which respects the Hamiltonian structure, definitly overkill 
+    // for our purposes. 
+
+    // http://www.dynamical-systems.org
+    // January 1,  2000
+
+// <!--                                                         
+
+var interrupt=0;                     // particles move 
+var x_center=300;                    // absolute x-position of center 
+var y_center=300;                    // absolute y-position of center 
+var size=200;                        // picture radius  
+var v;                               // used in mod()
+var Number=3;                        // number of particles
+
+var alpha   = 1.0;                   // mass of P 0, alpha=0 -> restr. 3 body problem
+var g       = 0.7;                   // gravitational constant
+var g_har   = 3.0;                   // constant to additional harmonic potential
+var dt      = 0.03;                  // time step
+var T       = 10;                    // number of Euler steps until display
+var t;                               // time variable in loop
+var tt=0;                            // time variable for energy measurements
+var ds      = dt/T;                  // time interval for Euler step
+
+var force_1;                         // force from first neighbor
+var force_2;                         // force from second neighbor
+var x_dir_1;                         // x-direction of force
+var y_dir_1;                         // y-direction of force
+var x_dir_2;                         // x-direction of force 
+var y_dir_2;                         // y-direction of force
+var mass_1;                          // mass of partner 1 
+var mass_2;                          // mass of partner 2
+
+var abs_1;                           // 
+var abs_2;                           // 
+var epsilon_1 = 0.1;                 // to regularize force; 
+var epsilon_2 = 0.0;                 // to regularize direction near collisions
+var x_center_mass;                   // center of mass  x-coordinate
+var y_center_mass;                   // center of mass  y-coordinate
+var energy=0.0;                      // total energy of the system
+var energy0=0.0;                     // initial total energy of the system
+var friction=0.0;                    // artifical friction on/off depending on energy
+                                     
+var x_pos  = new Array();            // x-coordinates of particles
+var y_pos  = new Array();            // y-coordinates of particles
+var x_vel  = new Array();            // x-velocities  of particles
+var y_vel  = new Array();            // y-velocities  of particles          
+var mass   = new Array();            // masses of particles
+var i;                               // index for particles
+var j;                               // index for particles
+
+
+var gg0,gg1,gg2,gg3,gg4;             // for display of control
+var flag_g=0, flag_alpha=0;          // for display of control
+var l  = new Array();                // letters for display
+
+function preload_letters() {
+dir = "gif/";
+  if (document.images != null) {
+    l[ 0]  = new Image(); l[ 0].src  = dir+"0.gif";
+    l[ 1]  = new Image(); l[ 1].src  = dir+"1.gif";
+    l[ 2]  = new Image(); l[ 2].src  = dir+"2.gif";
+    l[ 3]  = new Image(); l[ 3].src  = dir+"3.gif";
+    l[ 4]  = new Image(); l[ 4].src  = dir+"4.gif";
+    l[ 5]  = new Image(); l[ 5].src  = dir+"5.gif";
+    l[ 6]  = new Image(); l[ 6].src  = dir+"6.gif";
+    l[ 7]  = new Image(); l[ 7].src  = dir+"7.gif";
+    l[ 8]  = new Image(); l[ 8].src  = dir+"8.gif";
+    l[ 9]  = new Image(); l[ 9].src  = dir+"9.gif";
+    l[10]  = new Image(); l[10].src  = dir+"d.gif";    // ,
+    l[11]  = new Image(); l[11].src  = dir+"e.gif";    // empty picture
+    l[12]  = new Image(); l[12].src  = dir+"l.gif";    // <
+    l[13]  = new Image(); l[13].src  = dir+"la.gif";   // <  pushed
+    l[14]  = new Image(); l[14].src  = dir+"ll.gif";   // <<
+    l[15]  = new Image(); l[15].src  = dir+"lla.gif";  // << pushed
+    l[16]  = new Image(); l[16].src  = dir+"r.gif";    // >
+    l[17]  = new Image(); l[17].src  = dir+"ra.gif";   // >  pushed
+    l[18]  = new Image(); l[18].src  = dir+"rr.gif";   // >>
+    l[19]  = new Image(); l[19].src  = dir+"rra.gif";  // >> pushed
+    l[20]  = new Image(); l[20].src  = dir+"m.gif";    // minus sign
+    l[21]  = new Image(); l[21].src  = dir+"up.gif";   // on switch
+    l[22]  = new Image(); l[22].src  = dir+"down.gif"; // off switch
+    l[23]  = new Image(); l[23].src  = dir+"i1.gif";   // info letter
+    l[24]  = new Image(); l[24].src  = dir+"i2.gif";   // info letter
+  }
+}             
+
+if (document.getElementsByTagName && !document.all)    // to make it run
+    document.all = document.getElementsByTagName("*"); // also with NS 6
+
+if (document.layers) {                                 // for netscape 
+  layerStyleRef  ="layer.";
+  layerRef       ="document.layers";
+  styleSwitch    ="";
+}
+else{                                                  // for ie
+  layerStyleRef  ="layer.style.";
+  layerRef       ="document.all";
+  styleSwitch    =".style";
+}
+
+function move_body(layerName,left,top){
+  eval(layerRef+'["'+layerName+'"]'+styleSwitch+'.top=top');
+  eval(layerRef+'["'+layerName+'"]'+styleSwitch+'.left=left');
+}
+
+function show_body(layerName){
+  eval(layerRef+'["'+layerName+'"]'+styleSwitch+'.visibility="visible"');
+}
+
+function hide_body(layerName){
+  eval(layerRef+'["'+layerName+'"]'+styleSwitch+'.visibility="hidden"');
+}
+
+function increase_g(b)    { g = g + b; display_real(g,"g"); }
+function increase_alpha(b){ alpha = alpha + b; display_real(alpha,"alpha");}
+
+function run_up_g(){
+  g=g+0.01; display_real(g,"g");
+  if (flag_g==1) { setTimeout("run_up_g()",60); }
+}
+function run_down_g(){
+  g=g-0.01; display_real(g,"g");
+  if (flag_g==1) { setTimeout("run_down_g()",60); }
+}
+function walk_up_g(){
+  g=g+0.01; display_real(g,"g");
+  if (flag_g==1) { setTimeout("walk_up_g()",250); }
+}
+function walk_down_g(){
+  g=g-0.01; display_real(g,"g");
+  if (flag_g==1) { setTimeout("walk_down_g()",250); }
+}
+
+function reset_mass(){
+  mass[0] = Math.abs(alpha); 
+}
+
+function run_up_alpha(){
+  alpha=alpha+0.01; display_real(alpha,"alpha");
+  reset_mass(); 
+  if (flag_alpha==1) { setTimeout("run_up_alpha()",60); }
+}
+function run_down_alpha(){
+  alpha=alpha-0.01; display_real(alpha,"alpha");
+  reset_mass(); 
+  if (flag_alpha==1) { setTimeout("run_down_alpha()",60); }
+}
+function walk_up_alpha(){
+  alpha=alpha+0.01; display_real(alpha,"alpha");
+  reset_mass(); 
+  if (flag_alpha==1) { setTimeout("walk_up_alpha()",250); }
+}
+function walk_down_alpha(){
+  alpha=alpha-0.01; display_real(alpha,"alpha");
+  reset_mass(); 
+  if (flag_alpha==1) { setTimeout("walk_down_alpha()",250); }
+}
+
+function f(xx1,yy1,xx2,yy2) {
+  return g/((xx1-xx2)*(xx1-xx2)+(yy1-yy2)*(yy1-yy2)+epsilon_1)+ g_har;
+}
+
+
+function h(xx1,yy1,xx2,yy2) {
+  return Math.sqrt( (xx1-xx2)*(xx1-xx2) + (yy1-yy2)*(yy1-yy2)  )+epsilon_2;
+}
+
+function f_har(xx1,yy1,xx2,yy2) {
+  return ( (xx1-xx2)*(xx1-xx2) + (yy1-yy2)*(yy1-yy2)  )/2;
+}  
+
+function F(xx1,yy1,xx2,yy2) {               //   potential betweeen two particles
+  return -(g/(h(xx1,yy1,xx2,yy2))+g_har*f_har(xx1,yy1,xx2,yy2));
+}    
+
+
+function mod(u)  {                          //   put particles on torus [-1,1]x[-1,1]
+  v = (u+1)/2; 
+  v = v-Math.floor(v); 
+  return 2*v-1; 
+}
+
+function compute_energy() {
+  energy=0.0; 
+  for (i=0; i<Number; i++) {                 //  first the kinetic energy 
+    energy=energy+(x_vel[i]*x_vel[i]+y_vel[i]*y_vel[i])/2; 
+  }
+
+  for (i=0; i<Number; i++) {                 //  now the potential energy
+     energy = energy + F(x_pos[i],y_pos[i],x_pos[(i+1) %Number],y_pos[(i+1) %Number]);
+     energy = energy + F(x_pos[i],y_pos[i],x_pos[(i+2) %Number],y_pos[(i+2) %Number]);
+  } 
+
+}
+
+function initial_conditions() {
+  x_center_mass = 0;
+  y_center_mass = 0;
+ 
+  for (i=0; i<Number; i++) {
+    x_pos[i]      = Math.random(); 
+    y_pos[i]      = Math.random();
+    x_center_mass = x_center_mass + x_pos[i];
+    y_center_mass = y_center_mass + y_pos[i];
+  }
+  for (i=0; i<Number; i++) {
+    x_pos[i] = x_pos[i] - x_center_mass/Number;
+    y_pos[i] = y_pos[i] - y_center_mass/Number;
+    x_vel[i] = 0.0;
+    y_vel[i] = 0.0;
+    mass[i]  = 1.0;
+  }
+  mass[0]    = Math.abs(alpha);
+
+  compute_energy(); 
+  energy0=energy;                            //  determine initial energy
+  friction = 0.1*(energy-energy0);           //  firction =0 
+}                 
+
+function run(){
+  for (t=0; t<T; t++) {
+
+  for (i=0; i<3; i++) {
+    force_1  = f( x_pos[i],y_pos[i],x_pos[(i+1) %3],y_pos[(i+1) %3]);
+    abs_1    = h( x_pos[i],y_pos[i],x_pos[(i+1) %3],y_pos[(i+1) %3]);
+    force_2  = f( x_pos[i],y_pos[i],x_pos[(i+2) %3],y_pos[(i+2) %3]);
+    abs_2    = h( x_pos[i],y_pos[i],x_pos[(i+2) %3],y_pos[(i+2) %3]);
+
+    x_dir_1  = (x_pos[i]-x_pos[(i+1) %3])/abs_1; 
+    y_dir_1  = (y_pos[i]-y_pos[(i+1) %3])/abs_1; 
+    x_dir_2  = (x_pos[i]-x_pos[(i+2) %3])/abs_2; 
+    y_dir_2  = (y_pos[i]-y_pos[(i+2) %3])/abs_2; 
+    mass_1   =  mass[(i+1) %3]; 
+    mass_2   =  mass[(i+2) %3]; 
+
+    x_pos[i] = x_pos[i]+ds*x_vel[i];  x_pos[i] = mod( x_pos[i]); 
+    y_pos[i] = y_pos[i]+ds*y_vel[i];  y_pos[i] = mod( y_pos[i]); 
+    x_vel[i] = (1-ds*friction)*x_vel[i]
+               -ds*(mass_1*x_dir_1*force_1 + mass_2*x_dir_2*force_2);
+    y_vel[i] = (1-ds*friction)*y_vel[i]
+               -ds*(mass_1*y_dir_1*force_1 + mass_2*y_dir_2*force_2);
+
+  }
+
+  }
+
+  for (i=0; i<3; i++) {
+    move_body("B"+i,x_center+x_pos[i]*size,y_center+y_pos[i]*size);
+    show_body("B"+i); 
+  }
+
+  tt = tt % 10;                              // check energy in each 10 th step
+  if (tt==0) {
+    compute_energy(); 
+    friction = 0.1*(energy-energy0); 
+  }
+
+  if (!interrupt) {setTimeout("run();",10);}
+}
+
+function change(name,place) {
+   if (document.images != null) {
+      name = eval(name + ".src");
+      document [place].src = name;
+   }
+} 
+
+function display_real(a,u) {
+  if (a<-10 ) {a=-9.99;}
+  if (a>10)   {a=9.99;}
+  if (a<0) {change('l[20]',u+'0');} else {change('l[11]',u+'0');}
+  a = Math.abs(a);
+
+  gg1 = Math.floor(a/10); a=a-10*gg1       ;
+  gg2 = Math.floor(a);    a=a- 1*gg2       ;
+  gg3 = Math.floor(a*10); a=a- (1.0*gg3)/10;
+  gg4 = Math.floor(a*100);
+
+  if (gg1==0) {change('l[11]',u+'1'); } else {
+  change('l[gg1]',u+'1');
+  }
+  change('l[gg2]',u+'2');
+  change('l[gg3]',u+'3');
+  change('l[gg4]',u+'4');
+}
+
+function stop(){
+  interrupt=1;
+}
+
+function start(){
+  if (interrupt==1) {
+    reset();
+    interrupt=0;
+    run();
+  }
+}
+
+function restart(){
+  if (interrupt==1) {
+    interrupt=0;
+    run();
+  }
+}                     
+
+function switch_it(){
+  if    (interrupt==1) { restart();   change('l[21]','switch')  }
+  else                 { stop();      change('l[22]','switch')  }
+}
+
+
+function start_allover(){
+  preload_letters();
+  display_real(g,"g");
+  display_real(alpha,"alpha");
+  initial_conditions(); 
+  run();
+}    
+
+// -->
+</script>
+</head>
+
+<body bgcolor=#222 text=#ffffff link =#cccccc
+      alink=#ffffaa vlink=#aaaaaa
+      onload="start_allover();">      
+
+<div id="B0" width=75 height=75 style='position:absolute;visibility:hidden'>
+  <img src="gif/body.gif" border=0>
+</div>
+<div id="B1" width=75 height=75 style='position:absolute;visibility:hidden'>
+  <img src="gif/body.gif" border=0>
+</div>
+<div id="B2" width=75 height=75 style='position:absolute;visibility:hidden'>
+  <img src="gif/body.gif" border=0>
+</div>                     
+
+<center>
+<!-- table width=100% height=90%>
+<tr valign=top height=100>
+<td align=center> <font size=9> Three body problem </font> </td>
+<td>
+<a href="javascript:start()" onmouseover="javascript:switch_it();">
+<img src="gif/up.gif" width=50 height=50 border=0 name="switch"
+  alt="On and Off switch"></a>
+</a>
+</td>
+<td> <a href="http://www.dynamical-systems.org/threebody/info.html"
+         onmouseover="javascript:change('l[24]','info');"
+         onmouseout ="javascript:change('l[23]','info');">
+     <img src="gif/i1.gif" width=40 height=40 name="info"
+         border=0 alt="Click for Information">
+     </a>
+</td>
+
+<td>                                <!--  control of alpha -->
+<center>
+<table width=115 height=30 cellpadding=0 cellspacing=0 border=0>
+<tr>
+<td colspan=11 align=center> particle mass </td><td width=64>&nbsp;</td><td colspan=11 align=center> coupling </td>
+</tr>
+<tr>
+<td width=16><a href="javascript:increase_alpha(0.1)"
+     onmouseover="flag_alpha=1; run_down_alpha(); change('l[15]','ll_alpha');"
+     onmouseout ="flag_alpha=0;                   change('l[14]','ll_alpha');">
+             <img src="gif/ll.gif" width=10 height=30 border=0
+             alt="fast increase" name="ll_alpha"></td>
+<td width=16><a href="javascript:increase_alpha(0.01)"
+     onmouseover="flag_alpha=1; walk_down_alpha(); change('l[13]','l_alpha')"
+     onmouseout ="flag_alpha=0;                    change('l[12]','l_alpha')">
+             <img src="gif/l.gif" width=10 height=30 border=0
+             alt="slow decrease" name="l_alpha"></td>
+<td width=8> <img src="gif/e.gif" width=8  height=30 name=alpha0> </td>
+<td width=8> <img src="gif/e.gif" width=8  height=30 name=alpha1> </td>
+<td width=8> <img src="gif/e.gif" width=8  height=30 name=alpha2> </td>
+<td width=3> <img src="gif/d.gif" width=3  height=30        > </td>
+<td width=8> <img src="gif/e.gif" width=8  height=30 name=alpha3> </td>
+<td width=8> <img src="gif/e.gif" width=8  height=30 name=alpha4> </td>
+<td width=8> <img src="gif/e.gif" width=8  height=30        > </td>
+<td width=16><a href="javascript:increase_alpha(-0.01)"
+     onmouseover="flag_alpha=1; walk_up_alpha(); change('l[17]','r_alpha')"
+     onmouseout ="flag_alpha=0;                  change('l[16]','r_alpha')">
+             <img src="gif/r.gif" width=10 height=30 border=0
+             alt="slow increase" name="r_alpha"></td>
+<td width=16><a href="javascript:increase_alpha(-0.1)"
+     onmouseover="flag_alpha=1; run_up_alpha();   change('l[19]','rr_alpha')"
+     onmouseout ="flag_alpha=0;                   change('l[18]','rr_alpha')">
+             <img src="gif/rr.gif" width=10 height=30 border=0
+             alt="fast increase" name="rr_alpha"></td>
+<td width=64></td>
+<td width=16><a href="javascript:increase_g(0.1)"
+             onmouseover="flag_g=1; run_down_g(); change('l[15]','ll_g');"
+             onmouseout ="flag_g=0;               change('l[14]','ll_g');">
+             <img src="gif/ll.gif" width=10 height=30 border=0
+             alt="fast increase" name="ll_g"></td>
+<td width=16><a href="javascript:increase_g(0.01)"
+             onmouseover="flag_g=1; walk_down_g(); change('l[13]','l_g')"
+             onmouseout ="flag_g=0;                change('l[12]','l_g')">
+             <img src="gif/l.gif" width=10 height=30 border=0
+             alt="slow decrease" name="l_g"></td>
+<td width=8> <img src="gif/e.gif" width=8  height=30 name=g0> </td>
+<td width=8> <img src="gif/e.gif" width=8  height=30 name=g1> </td>
+<td width=8> <img src="gif/e.gif" width=8  height=30 name=g2> </td>
+<td width=3> <img src="gif/d.gif" width=3  height=30        > </td>
+<td width=8> <img src="gif/e.gif" width=8  height=30 name=g3> </td>
+<td width=8> <img src="gif/e.gif" width=8  height=30 name=g4> </td>
+<td width=8> <img src="gif/e.gif" width=8  height=30        > </td>
+<td width=16><a href="javascript:increase_g(-0.01)"
+             onmouseover="flag_g=1; walk_up_g();   change('l[17]','r_g')"
+             onmouseout ="flag_g=0;                change('l[16]','r_g')">
+             <img src="gif/r.gif" width=10 height=30 border=0
+             alt="slow increase" name="r_g"></td>
+<td width=16><a href="javascript:increase_g(-0.1)"
+             onmouseover="flag_g=1; run_up_g();   change('l[19]','rr_g')"
+             onmouseout ="flag_g=0;               change('l[18]','rr_g')">
+             <img src="gif/rr.gif" width=10 height=30 border=0
+             alt="fast increase" name="rr_g"></td>
+</tr>
+</table>
+</center>
+                                    <!--  end control of g -->       
+
+</td>
+</tr>
+<tr height=90%>
+<td> &nbsp;  </td> 
+</tr>
+</table>
+</center>
+<br>    
+
+
+<noscript>
+This document contains programming that requires a scriptable browser
+which can handle layers. You might just want to proceed to the 
+<a href="info.html"> Information page. 
+</noscript> 
+<div style='position:absolute; bottom:10; left:10'>&copy  2000,  <a href="../index.html">  dynamical-systems.org </a></div>
+
+
+
+</body>
+</html>                  
+
+
+
+
